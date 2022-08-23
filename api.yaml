@@ -1,0 +1,597 @@
+openapi: 3.0.1
+info:
+  title: Bchat Social Group Server
+  description: >
+    API documentation for Bchat Social groups.  This is the API that
+    [Bchat](https://bchat.beldex.io/) and related tools use to interface with Social groups.
+  contact:
+    name: The Beldex Project
+    email: support@beldex.io
+    url: https://bchat.beldex.io/
+  license:
+    name: GPL v3.0
+    url: https://www.gnu.org/licenses/gpl-3.0.en.html
+  version: "3.0"
+externalDocs:
+  description: Find out more about the Beldex project
+  url: http://beldex.io
+paths:
+  /user/{sessionId}/permission:
+    post:
+      tags: [Users]
+      summary: Applies permissions or restrictions to a user.
+      description: >
+        Applies or removes a user's permissions to one or more rooms.
+        
+        
+        The request specifies grants (`true`) or revocations (`false`) of permissions to apply.
+        Granting or revoking a permission adds a specific override for the given user that overrides
+        the default room permissions.
+        
+        
+        You can explicitly clear one or more permission setting by specifying a timeout of `-1` (in
+        this case the actual true/false value of the permissions are ignored).
+        
+        
+        Note that the given bchat ID does not have to exist: it is possible to grant permissions
+        preemptively for a bchat ID that has never visited the server or room(s).
+      parameters:
+      - $ref: "#/components/parameters/pathSessionId"
+      requestBody:
+        description: "Details of the permission update to apply."
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [rooms]
+              properties:
+                rooms:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/RoomToken"
+                  minItems: 1
+                  description: >
+                    List of room tokens to which the permissions should be applied. The invoking
+                    user must be a moderator (or admin) of all of the given rooms.
+                timeout:
+                  type: number
+                  format: double
+                  nullable: true
+                  example: 86400
+                  description: >
+                    How long the new permission (or restriction) should apply, in seconds.  If the
+                    user already has future permission changes scheduled then they will be cancelled
+                    and replaced the changes scheduled here.
+                    
+                    
+                    When the timeout expires, the specific override will be removed and the user's
+                    permission will revert to the room's defaults.
+                    
+                    
+                    Using a timeout of -1 clears any given permission/restrictions immediately.
+                    Note that, in this case, the actual true/false value is ignored.  For instance,
+                    `timeout: -1, read: false` and `timeout: -1, read: true` both clear any existing
+                    user-specific permission for `read`.
+                read:
+                  type: boolean
+                  nullable: true
+                  example: false
+                  description: >
+                    If true this grants permission to read the room's messages even if the room
+                    defaults do not allow reading.  If false this restricts permission to read the
+                    room's messages even if the room's default allows reading.  Specifying this as
+                    null will explicitly delete any user-specific read override (effectively
+                    returning the user's read permission to the room's default).
+                accessible:
+                  type: boolean
+                  nullable: true
+                  example: false
+                  description: >
+                    If true this grants permission to read the room's metadata when the user doesn't
+                    have read permission.  That is, having this true and read false means the user
+                    cannot read messages, but can get information about the room, while both false
+                    means the user cannot access any details of the room.  Specifying this as null
+                    will explicitly delete any user-specific accessible override, returning the
+                    user's effective permission to the room's default.
+                write:
+                  type: boolean
+                  nullable: true
+                  example: true
+                  description: >
+                    If true this grants permission to post messages to the room, even if the room's
+                    default permissions do not allow posting.  If false this restricts the user from
+                    posting.  Specifying this as null will explicitly delete any user-specific write
+                    override, returning the user's effective permission to the room's default.
+                upload:
+                  type: boolean
+                  nullable: true
+                  example: true
+                  description: >
+                    If true this grants permission to upload files to the room for this user, even
+                    if the room's default permission does not allow uploads.  If false the user is
+                    restricted from uploading files.  Specifying as null will explicitly delete any
+                    user-specific override, returning the user's effective permission to the room's
+                    default.
+            examples:
+              tworooms:
+                summary: "1-day mute in two rooms"
+                value:
+                  rooms: ["bchat", "beldex"]
+                  timeout: 86400
+                  write: false
+              allow-uploads:
+                summary: "Allow file attachments for 1 week"
+                value:
+                  rooms: ["bchat-help"]
+                  upload: true
+                  timeout: 604800
+              secretroom:
+                summary: "Grant access to a restricted room"
+                value:
+                  rooms: ["top-secret"]
+                  read: true
+                  write: true
+                  upload: true
+      responses:
+        200:
+          description: Permission update applied successfully.
+          content: {}
+        403:
+          description: >
+            Permission denied.  The user attempting to set the permissions does not have moderator
+            permissions for one or more of the given rooms.
+          content: {}
+  /user/{bchatId}/deleteMessages:
+    post:
+      tags: [Users]
+      summary: Deletes all of a user's messages.
+      description: >
+        Deletes all messages posted by the given user from one or more rooms, or from all rooms on
+        the server.
+        
+        
+        The caller must have moderator permission in all given rooms, or be a server moderator for
+        global server deletion.
+      parameters:
+      - $ref: "#/components/parameters/pathSessionId"
+      requestBody:
+        description: "Details of the deletion."
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                rooms:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/RoomToken"
+                  minItems: 1
+                  description: >
+                    List of room tokens from which messages should be deleted.  The invoking user
+                    must be a moderator (or admin) or all of the given rooms.
+                    
+                    
+                    Exclusive of `global`.
+                global:
+                  type: boolean
+                  description: >
+                    If true then delete all messages made by this user from all rooms on the server.
+                    The invoking user must be a server-level moderator or admin.  In particular,
+                    this does *not* allow a non-server moderator to delete the user's messages from
+                    all rooms they moderate.
+                    
+                    
+                    Exclusive of `rooms`.
+            examples:
+              tworooms:
+                summary: "Delete all messages from two rooms"
+                value:
+                  rooms: ["bchat", "beldex"]
+              permaban:
+                summary: "Delete all messages from all rooms"
+                value:
+                  global: true
+      responses:
+        200:
+          description: Messages deleted successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    $ref: "#/components/schemas/SessionID"
+                  messages_deleted:
+                    type: integer
+                    format: int64
+                    description: The number of messages deleted.
+        403:
+          description: >
+            Permission denied.  The user attempting to set the ban does not have moderator
+            permissions for one or more of the given rooms (or server moderator permission for a
+            global ban).
+          content: {}
+  /batch:
+    post:
+      tags: [Batch]
+      summary: "Utility endpoint to allow submitting multiple independent requests at once."
+      description: >
+        This is used, for example, to poll multiple rooms on the same server for updates in a single
+        query rather than needing to make multiple requests for each room.
+        
+        No guarantee is made as to the order in which sub-requests are processed; use the
+        `/sequence` instead if you need that.
+        
+        For contained subrequests that specify a body (i.e. POST or PUT requests) exactly one of
+        `json`, `b64`, or `bytes` must be provided with the request body.
+      requestBody:
+        description: "List of sub-requests to issue for this batch request."
+        required: true
+        content:
+          application/json:
+            schema:
+              type: array
+              items:
+                type: object
+                required: [method, path]
+                properties:
+                  method:
+                    type: string
+                    description: "The request method, typically GET for batched requests, though other methods are also permitted."
+                  path:
+                    type: string
+                    description: "The request path, e.g. `/room/123/messages/since/45678`"
+                  headers:
+                    type: object
+                    description: "Dict of HTTP headers for the subrequest.  Optional."
+                  json:
+                    description: "Nested json structure containing a json body for a POST/PUT request.  Exclusive of `b64` and `bytes`."
+                    oneOf:
+                    - type: object
+                    - type: array
+                  b64:
+                    description: "Byte data for the body for a POST/PUT request.  Exclusive of `json` and `bytes`"
+                    type: string
+                    format: byte
+                  bytes:
+                    description: "Optional binary body, as raw octets.  Exclusive of `b64` and `json`.  Not recommended when using json unless the data happens to be mostly safe ascii"
+                    type: string
+                    format: binary
+      responses:
+        200:
+          description: "Batch jobs completed. Note that 200 only means the batch was processed; for individual sub-requests see the relevant sub-response code.  The returned array returns responses in exactly the same order as the request's list of sub-requests (regardless of the actual order jobs were processed)."
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [code, content-type, body]
+                  properties:
+                    code:
+                      type: integer
+                      format: int32
+                      description: "HTTP response code for the subrequest (e.g. 200, 404, etc.)"
+                    content-type:
+                      type: string
+                      description: "HTTP content-type of the subrequest response (e.g. `application/json`)"
+                    body:
+                      oneOf:
+                        - type: object
+                        - type: array
+                        - type: string
+                          format: byte
+                      description: >
+                        The response body.  For responses with `content-type` set to
+                        `application/json` this will be the direct object or array response; for any
+                        other content otherwise this will be a string containing the base64-encoded
+                        response data.
+
+  /sequence:
+    post:
+      tags: [Batch]
+      summary: "Utility endpoint to submit a batch of sequenced, dependent requests."
+      description: >
+        The requests are guaranteed to be performed sequentially in the order given in the request
+        and will abort if any request does not return a status-`2xx` response.
+        
+        For example, this can be used to ban and delete all of a user's messages by sequencing the
+        ban followed by the delete_all: if the ban fails (e.g. because permission is denied) then
+        the delete_all will not occur. The batch body and response are identical to the `/batch`
+        endpoint; requests that are not carried out because of an earlier failure will have a
+        response code of `412` (Precondition Failed)."
+      requestBody:
+        $ref: "#/paths/~1batch/post/requestBody"
+      responses:
+        200:
+          $ref: "#/paths/~1batch/post/responses/200"
+
+  /beldex/v4/lsrpc:
+    post:
+      tags: [Onion]
+      summary: "Endpoint for submitting an encrypted onion request"
+      description: >
+        The data is an onion-encrypted request for another endpoint, wrapped in an encrypted layer
+        for this Social group server.
+      requestBody:
+        description: >
+          Onion request endpoint information.  Note that the field descriptions here are *inside*
+          the onion encryption layer; the onion encryption payload itself is documented elsewhere.
+        required: true
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+              description: >
+                The onion request data.  This is encoded/encrypted in multiple layers, as follows.
+                
+                
+                The data is first constructed as one or two parts: the first part is json contains
+                request metadata with fields:
+                - method -- "GET", "POST", etc. of the subrequest
+                - endpoint -- the subrequest endpoint, e.g. `/room/some-room/messages/since/123`
+                - headers -- request headers, typically containing X-BSGS-* auth info and, for
+                  POST/PUT requests, a Content-Type.
+                
+                
+                The second part is the request body, in bytes (only for POST/PUT requests).
+                
+                
+                These two pieces are encoded as a one- or two-string bencoded list, which has format:
+                
+                
+                `l123:jsone` or `l123:json456:bodye` where 123 is the length of the json and 456 is
+                the length of the body, if the request has a body.  (Both strings are byte strings).
+                
+                
+                This data is then encrypted using onion-request style encryption; see the
+                beldex-storage-server for details on how this is done.
+      responses:
+        200:
+          description: >
+            Onion request completed.  The subrequest response will be encoded in a two-string
+            bencoded list (see the request details for the encoding specifics) where the first
+            string contains the response metadata as json with keys:
+            
+            
+            - code -- the HTTP response code of the subrequest, e.g. 200, 404
+            - headers -- a dict of HTTP response headers; the header name keys are always
+              lower-cased.
+            
+            
+            The second part is the response body bytes; as in HTTP, interpreting this depends on the
+            `content-type` header in the `headers` metadata, and the details of the invoked
+            endpoint.
+            
+            
+            These two byte strings are bencoded, and then the bencoded data is encrypted using the
+            same ephemeral key and encryption type as was used in the request.
+
+components:
+  schemas:
+    RoomToken:
+      type: string
+      title: A room token used in URLs to identify the room.
+      pattern: "^[\\w-]{1,64}$"
+      example: "bchat-general"
+    SessionID:
+      type: string
+      title: A bchat ID, in hex.
+      description: >
+        The Bchat ID is the fixed byte `bd` followed by the 32-byte X25519 pubkey used to sign and
+        encrypt messages.
+      pattern: "^bd[0-9a-fA-F]{64}$"
+    Room:
+      title: Information about a room
+      type: object
+      properties:
+
+    Message:
+      title: The content of a posted message
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: The numeric message id.
+        session_id:
+          allOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: object
+              description: >
+                The bchat ID of the user who posted this message.  Omitted in contexts where the
+                information isn't available or isn't useful or available, such as in the
+                confirmation of submitting a post.
+        posted:
+          type: number
+          format: double
+          description: >
+            Unix timestamp of when the message was posted to the server.
+        edited:
+          type: number
+          format: double
+          description: >
+            Unix timestamp of the last edit to this message.  This field is omitted if the message
+            has never been edited.
+        seqno:
+          type: integer
+          format: int64
+          description: >
+            This message's event sequence number in the room; this number is set to the room's
+            current monotonic sequence counter (*not* a timestamp!) when this message is first
+            posted and whenever the message is edited or deleted.  Thus an update to this value for
+            the same message indicates an update or deletion has occurred.
+            
+            
+            Note that this sequence number is used for event tracking, *not* message ordering.  For
+            example, an edit will increase this value so that polling clients will receive the edit,
+            but the edit itself should not re-position the message.
+        whisper:
+          type: boolean
+          description: >
+            If true then this message is a whisper for the current user (either directed at them, or
+            sent to all moderators).  Omitted when the message is not a whisper.
+        whisper_mods:
+          type: boolean
+          description: >
+            If true then this whisper is meant to be seen by all moderators, false for whispers
+            meant only for a specific user.  Omitted if the message is not a whisper.
+        whisper_to:
+          allOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: object
+              description: >
+                The bchat ID of the recipient of this whisper.  Omitted if the message is not a
+                whisper, or if the whisper is for all mods without a specific recipient.
+        data:
+          type: string
+          format: byte
+          description: >
+            The posted message data, encoded in base64.  For a deleted message this field is
+            omitted.  For an edited message, this field contains the latest message value.
+        signature:
+          type: string
+          format: byte
+          description: >
+            An XEd25519 signature of the data contained in `data`, signed using the X25519 pubkey
+            contained in the user's Bchat ID.  This field is omitted when `data` is omitted (i.e.
+            for deleted messages.)
+
+    DirectMessage:
+      title: The content of a direct message sent through this server
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: The numeric message id.
+        data:
+          type: string
+          format: byte
+          description: >
+            The direct message data, encoded in base64.
+        signature:
+          type: string
+          format: byte
+          description: >
+            An XEd25519 signature of the data contained in `data`, signed using the X25519 pubkey
+            contained in the user's Bchat ID.
+        expires_at:
+          type: number
+          format: double
+          description: >
+            Unix timestamp of when the message is scheduled to expire from the server.
+        sender:
+          allOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: object
+              description: "The bchat ID of the user who sent this message."
+        recipient:
+          allOf:
+            - $ref: "#/components/schemas/SessionID"
+            - type: object
+              description: "The bchat ID to which this message was sent."
+
+  parameters:
+    pathRoomToken:
+      name: roomToken
+      in: path
+      description: "Token of the room to which the request is being made."
+      required: true
+      schema:
+        $ref: "#/components/schemas/RoomToken"
+    pathMessageId:
+      name: messageId
+      in: path
+      description: "Numeric message id of a post."
+      required: true
+      schema:
+        type: integer
+        format: int64
+    queryMessagesLimit:
+      name: limit
+      in: query
+      required: false
+      description: "Number of messages to return.  If omitted 100 messages are returned."
+      schema:
+        type: integer
+        format: int32
+        minimum: 1
+        maximum: 256
+    pathFileId:
+      name: fileId
+      in: path
+      required: true
+      description: "ID of a file uploaded to the room."
+      schema:
+        type: integer
+        format: int64
+    pathSessionId:
+      name: bchatId
+      in: path
+      required: true
+      description: "Bchat ID of a user."
+      schema:
+        $ref: "#/components/schemas/SessionID"
+
+  securitySchemes:
+    pubkey:
+      type: apiKey
+      name: X-BSGS-Pubkey
+      in: header
+      description: >
+        The Ed25519 public key of the request.  For non-blinded requests this is the root bchat
+        Ed25519 pubkey with '00' prefixed; for blinded requests this begins with 'bd' and follows
+        the blinding procedure detailed elsewhere.
+    nonce:
+      type: apiKey
+      name: X-BSGS-Nonce
+      in: header
+      description: >
+        A unique, random nonce string of exactly 16 source bytes encoded in base64 (i.e. 24 base64
+        characters, including two trailing padding characters).  This must be unique for every
+        request from this pubkey within the last 24 hours; nonce reuse will result in failed
+        requests.
+    timestamp:
+      type: apiKey
+      name: X-BSGS-Timestamp
+      in: header
+      description: >
+        Unix timestamp integer (expressed as a string) of the time when the request was initiated to
+        help avoid replay attacks.  This timestamp must be within ±24 hours of the server's time
+        when the request is received.
+    signature:
+      type: apiKey
+      name: X-BSGS-Signature
+      in: header
+      description: >
+        Ed25519 signature of
+        
+        
+        `SERVER_PUBKEY || NONCE || TIMESTAMP || METHOD || PATH || HBODY`
+        
+        
+        signed using the client's blinded or unblinded pubkey (from the `X-BSGS-Pubkey` header),
+        encoded using base64 (with or without padding).
+        
+        
+        SERVER_PUBKEY and NONCE are 32- and 16-byte values, respectively (i.e. the nonce here is the
+        *decoded* value of the X-BSGS-Nonce header).
+        
+        
+        TIMESTAMP is the timestamp expressed as a decimal string, encoded in ascii bytes.
+        
+        
+        METHOD is the ascii request method (`GET`, `POST`, etc.)
+        
+        
+        PATH is in utf-8 encoded bytes.
+        
+        
+        HBODY is an empty string (i.e. omitted from the signature) if the request has no body, or
+        has an empty body.  Otherwise it must be a 64-byte BLAKE2b hash of the request body.
+
+# vim:sw=2:et:tw=100

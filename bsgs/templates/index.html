@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block body %}
+
+
+<h1> Social Group directory </h1>
+<ul><h3>
+  {% for room in rooms %}<br>
+  <li ><a href="/r/{{room.token}}" >{{room.token}}</a></li>
+  {% endfor %}
+</h3></ul>
+
+{% endblock %}

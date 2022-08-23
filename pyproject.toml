@@ -1,0 +1,11 @@
+[tool.black]
+line-length = 100
+skip-string-normalization = true
+skip-magic-trailing-comma = true
+target-version = ['py38']
+include = '\.py$'
+exclude = 'bsgs/.*_pb2.py'
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"

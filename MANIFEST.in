@@ -1,0 +1,4 @@
+include bsgs/schema.sqlite
+include bsgs/schema.pgsql
+include bsgs/static/*
+include bsgs/templates/*

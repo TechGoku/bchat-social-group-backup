@@ -1,0 +1,3 @@
+site_name: BSGS API
+theme: nature
+markdown_extensions: [codehilite]
